@@ -3,6 +3,7 @@ package dicom
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/suyashkumar/dicom/pkg/vrraw"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -44,6 +45,18 @@ func TestWrite(t *testing.T) {
 				mustNewElement(tag.Rows, []int{128}),
 				mustNewElement(tag.FloatingPointValue, []float64{128.10}),
 				mustNewElement(tag.DimensionIndexPointer, []int{32, 36950}),
+			}},
+			expectedError: nil,
+		},
+		{
+			name: "private tag",
+			dataset: Dataset{Elements: []*Element{
+				mustNewElement(tag.MediaStorageSOPClassUID, []string{"1.2.840.10008.5.1.4.1.1.1.2"}),
+				mustNewElement(tag.MediaStorageSOPInstanceUID, []string{"1.2.3.4.5.6.7"}),
+				// We need to use an Explicit transfer syntax here or all data will be
+				// read in with "UN".
+				mustNewElement(tag.TransferSyntaxUID, []string{uid.ExplicitVRLittleEndian}),
+				mustNewPrivateElement(tag.Tag{0x0003, 0x0010}, vrraw.ShortText, []string{"some data"}),
 			}},
 			expectedError: nil,
 		},
@@ -98,6 +111,57 @@ func TestWrite(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			name: "sequence (2 Items with 2 values each) - skip vr verification",
+			dataset: Dataset{Elements: []*Element{
+				mustNewElement(tag.MediaStorageSOPClassUID, []string{"1.2.840.10008.5.1.4.1.1.1.2"}),
+				mustNewElement(tag.MediaStorageSOPInstanceUID, []string{"1.2.3.4.5.6.7"}),
+				mustNewElement(tag.TransferSyntaxUID, []string{uid.ImplicitVRLittleEndian}),
+				mustNewElement(tag.PatientName, []string{"Bob", "Jones"}),
+				makeSequenceElement(tag.AddOtherSequence, [][]*Element{
+					// Item 1.
+					{
+						{
+							Tag:                    tag.PatientName,
+							ValueRepresentation:    tag.VRStringList,
+							RawValueRepresentation: "PN",
+							Value: &stringsValue{
+								value: []string{"Bob", "Jones"},
+							},
+						},
+						{
+							Tag:                    tag.Rows,
+							ValueRepresentation:    tag.VRUInt16List,
+							RawValueRepresentation: "US",
+							Value: &intsValue{
+								value: []int{100},
+							},
+						},
+					},
+					// Item 2.
+					{
+						{
+							Tag:                    tag.PatientName,
+							ValueRepresentation:    tag.VRStringList,
+							RawValueRepresentation: "PN",
+							Value: &stringsValue{
+								value: []string{"Bob", "Jones"},
+							},
+						},
+						{
+							Tag:                    tag.Rows,
+							ValueRepresentation:    tag.VRUInt16List,
+							RawValueRepresentation: "US",
+							Value: &intsValue{
+								value: []int{100},
+							},
+						},
+					},
+				}),
+			}},
+			expectedError: nil,
+			opts:          []WriteOption{SkipVRVerification()},
+		},
+		{
 			name: "nested sequences",
 			dataset: Dataset{Elements: []*Element{
 				mustNewElement(tag.MediaStorageSOPClassUID, []string{"1.2.840.10008.5.1.4.1.1.1.2"}),
@@ -132,6 +196,43 @@ func TestWrite(t *testing.T) {
 				}),
 			}},
 			expectedError: nil,
+		},
+		{
+			name: "nested sequences - without VR verification",
+			dataset: Dataset{Elements: []*Element{
+				mustNewElement(tag.MediaStorageSOPClassUID, []string{"1.2.840.10008.5.1.4.1.1.1.2"}),
+				mustNewElement(tag.MediaStorageSOPInstanceUID, []string{"1.2.3.4.5.6.7"}),
+				mustNewElement(tag.TransferSyntaxUID, []string{uid.ImplicitVRLittleEndian}),
+				mustNewElement(tag.PatientName, []string{"Bob", "Jones"}),
+				makeSequenceElement(tag.AddOtherSequence, [][]*Element{
+					// Item 1.
+					{
+						{
+							Tag:                    tag.PatientName,
+							ValueRepresentation:    tag.VRStringList,
+							RawValueRepresentation: "PN",
+							Value: &stringsValue{
+								value: []string{"Bob", "Jones"},
+							},
+						},
+						// Nested Sequence.
+						makeSequenceElement(tag.AnatomicRegionSequence, [][]*Element{
+							{
+								{
+									Tag:                    tag.PatientName,
+									ValueRepresentation:    tag.VRStringList,
+									RawValueRepresentation: "PN",
+									Value: &stringsValue{
+										value: []string{"Bob", "Jones"},
+									},
+								},
+							},
+						}),
+					},
+				}),
+			}},
+			expectedError: nil,
+			opts:          []WriteOption{SkipVRVerification()},
 		},
 		{
 			name: "without transfer syntax",
@@ -384,6 +485,7 @@ func TestVerifyVR(t *testing.T) {
 		inVR    string
 		wantVR  string
 		wantErr bool
+		opts    writeOptSet
 	}{
 		{
 			name:    "wrong vr",
@@ -409,10 +511,30 @@ func TestVerifyVR(t *testing.T) {
 			wantVR:  "UN",
 			wantErr: false,
 		},
+		{
+			name: "private element",
+			tg: tag.Tag{
+				Group:   0x0003,
+				Element: 0x0010,
+			},
+			inVR:    "DA",
+			wantVR:  "DA",
+			wantErr: false,
+		},
+		{
+			name:    "skip validation - wrong vr",
+			tg:      tag.PatientName,
+			inVR:    "DS",
+			wantVR:  "DS",
+			wantErr: false,
+			opts: writeOptSet{
+				skipVRVerification: true,
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			vr, err := verifyVROrDefault(tc.tg, tc.inVR)
+			vr, err := verifyVROrDefault(tc.tg, tc.inVR, tc.opts)
 			if (err != nil && !tc.wantErr) || (err == nil && tc.wantErr) {
 				t.Errorf("verifyVROrDefault(%v, %v), got err: %v but want err: %v", tc.tg, tc.inVR, err, tc.wantErr)
 			}
