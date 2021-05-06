@@ -1,0 +1,44 @@
+[
+    {
+        "name": "CStoreRq",
+        "type": "request",
+        "command_field": 1,
+        "fields": [
+            {
+                "name": "AffectedSOPClassUID",
+                "type": "string",
+                "required": true
+            },
+            {
+                "name": "MessageID",
+                "type": "string",
+                "required": true
+            },
+            {
+                "name": "Priority",
+                "type": "uint16",
+                "required": true
+            },
+            {
+                "name":"CommandDataSetType",
+                "type": "uint16",
+                "required": true
+            },
+            {
+                "name": "AffectedSOPInstanceUID",
+                "type": "string",
+                "required": true
+            },
+            {
+                "name": "MoveOriginatorApplicationEntityTitle",
+                "type": "string",
+                "required": false
+            },
+            {
+                "name": "MoveOriginatorMessageID",
+                "type": "string",
+                "required": false
+            }
+        ]
+    }
+]
