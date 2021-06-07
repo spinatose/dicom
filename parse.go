@@ -184,7 +184,7 @@ func (p *Parser) Next() (*Element, error) {
 
 // GetMetadata returns just the set of metadata elements that have been parsed
 // so far.
-func (p *Parser) GetMetadata() Dataset {
+func (p *Parser) Metadata() Dataset {
 	return p.metadata
 }
 

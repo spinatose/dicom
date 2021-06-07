@@ -87,17 +87,17 @@ type Value interface {
 // [][]*Element (represents a sequence, which contains several
 // items which each contain several elements).
 func NewValue(data interface{}) (Value, error) {
-	switch data.(type) {
+	switch v := data.(type) {
 	case []int:
-		return &intsValue{value: data.([]int)}, nil
+		return &intsValue{value: v}, nil
 	case []string:
-		return &stringsValue{value: data.([]string)}, nil
+		return &stringsValue{value: v}, nil
 	case []byte:
-		return &bytesValue{value: data.([]byte)}, nil
+		return &bytesValue{value: v}, nil
 	case PixelDataInfo:
-		return &pixelDataValue{PixelDataInfo: data.(PixelDataInfo)}, nil
+		return &pixelDataValue{PixelDataInfo: v}, nil
 	case []float64:
-		return &floatsValue{value: data.([]float64)}, nil
+		return &floatsValue{value: v}, nil
 	case [][]*Element:
 		items := data.([][]*Element)
 		sequenceItems := make([]*SequenceItemValue, 0, len(items))
