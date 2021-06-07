@@ -360,7 +360,7 @@ func TestReadNativeFrames(t *testing.T) {
 				t.Errorf("TestReadFloat: unable to create new dicomio.Reader")
 			}
 
-			pixelData, _, err := readNativeFrames(r, &tc.existingData, nil)
+			pixelData, _, err := readNativeFrames(r, &tc.existingData, DefaultOptions())
 			if !errors.Is(err, tc.expectedError) {
 				t.Errorf("TestReadNativeFrames(%v): did not get expected error. got: %v, want: %v", tc.data, err, tc.expectedError)
 			}
@@ -414,7 +414,7 @@ func BenchmarkReadNativeFrames(b *testing.B) {
 			dataset, r := buildReadNativeFramesInput(c.Rows, c.Cols, c.NumFrames, c.SamplesPerPixel, b)
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, _, _ = readNativeFrames(r, dataset, nil)
+				_, _, _ = readNativeFrames(r, dataset, DefaultOptions())
 			}
 		})
 	}

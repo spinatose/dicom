@@ -3,10 +3,11 @@ package dicom
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/suyashkumar/dicom/pkg/vrraw"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/suyashkumar/dicom/pkg/vrraw"
 
 	"github.com/suyashkumar/dicom/pkg/frame"
 
@@ -452,7 +453,7 @@ func TestWrite(t *testing.T) {
 					t.Fatalf("Unexpected error state file: %s: %v", file.Name(), err)
 				}
 
-				readDS, err := Parse(f, info.Size(), nil)
+				readDS, err := Parse(f, Limit(info.Size()))
 				if err != nil {
 					t.Errorf("Parse of written file, unexpected error: %v", err)
 				}
@@ -632,16 +633,16 @@ func TestWriteOtherWord(t *testing.T) {
 		expectedErr  error
 	}{
 		{
-			name:  "OtherWord",
-			value: []byte{0x1, 0x2, 0x3, 0x4},
-			vr:    "OW",
+			name:         "OtherWord",
+			value:        []byte{0x1, 0x2, 0x3, 0x4},
+			vr:           "OW",
 			expectedData: []byte{0x1, 0x2, 0x3, 0x4},
 			expectedErr:  nil,
 		},
 		{
-			name:  "OtherBytes",
-			value: []byte{0x1, 0x2, 0x3, 0x4},
-			vr:    "OB",
+			name:         "OtherBytes",
+			value:        []byte{0x1, 0x2, 0x3, 0x4},
+			vr:           "OB",
 			expectedData: []byte{0x1, 0x2, 0x3, 0x4},
 			expectedErr:  nil,
 		},

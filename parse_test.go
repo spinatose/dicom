@@ -36,7 +36,7 @@ func TestParse(t *testing.T) {
 				if err != nil {
 					t.Errorf("Unable to stat %s. Error: %v", f.Name(), err)
 				}
-				_, err = dicom.Parse(dcm, info.Size(), nil)
+				_, err = dicom.Parse(dcm, dicom.Limit(info.Size()))
 				if err != nil {
 					t.Errorf("dicom.Parse(%s) unexpected error: %v", f.Name(), err)
 				}
@@ -67,7 +67,41 @@ func BenchmarkParse(b *testing.B) {
 
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					_, _ = dicom.Parse(bytes.NewBuffer(data), int64(len(data)), nil)
+					_, _ = dicom.Parse(bytes.NewBuffer(data), dicom.Limit(int64(len(data))))
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkParseIncludeTags(b *testing.B) {
+	files, err := ioutil.ReadDir("./testdata")
+	if err != nil {
+		b.Fatalf("unable to read testdata/: %v", err)
+	}
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".dcm") {
+			b.Run(f.Name(), func(b *testing.B) {
+				dcm, err := os.Open("./testdata/" + f.Name())
+				if err != nil {
+					b.Errorf("Unable to open %s. Error: %v", f.Name(), err)
+				}
+				defer dcm.Close()
+
+				data, err := ioutil.ReadAll(dcm)
+				if err != nil {
+					b.Errorf("Unable to read file into memory for benchmark: %v", err)
+				}
+
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					_, _ = dicom.Parse(bytes.NewBuffer(data),
+						dicom.Limit(int64(len(data))),
+						dicom.IncludeTags(
+							tag.StudyInstanceUID,
+							tag.SeriesInstanceUID,
+							tag.SOPInstanceUID,
+						))
 				}
 			})
 		}
@@ -99,12 +133,12 @@ func Example_streamingFrames() {
 		}
 	}()
 
-	dataset, _ := dicom.ParseFile("testdata/1.dcm", frameChan)
+	dataset, _ := dicom.ParseFile("testdata/1.dcm", dicom.FrameChannel(frameChan))
 	fmt.Println(dataset) // The full dataset
 }
 
 func Example_getImageFrames() {
-	dataset, _ := dicom.ParseFile("testdata/1.dcm", nil)
+	dataset, _ := dicom.ParseFile("testdata/1.dcm")
 	pixelDataElement, _ := dataset.FindElementByTag(tag.PixelData)
 	pixelDataInfo := dicom.MustGetPixelDataInfo(pixelDataElement.Value)
 	for i, fr := range pixelDataInfo.Frames {
@@ -112,5 +146,22 @@ func Example_getImageFrames() {
 		f, _ := os.Create(fmt.Sprintf("image_%d.jpg", i))
 		_ = jpeg.Encode(f, img, &jpeg.Options{Quality: 100})
 		_ = f.Close()
+	}
+}
+
+func Test_includeTags(t *testing.T) {
+	ds, err := dicom.ParseFile("testdata/1.dcm", dicom.IncludeTags(tag.StudyInstanceUID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = ds.FindElementByTag(tag.StudyInstanceUID)
+	if err != nil {
+		t.Fail()
+	}
+
+	_, err = ds.FindElementByTag(tag.SOPInstanceUID)
+	if err == nil {
+		t.Fail()
 	}
 }

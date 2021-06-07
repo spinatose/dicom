@@ -30,7 +30,6 @@ import (
 
 	"github.com/suyashkumar/dicom/pkg/charset"
 	"github.com/suyashkumar/dicom/pkg/dicomio"
-	"github.com/suyashkumar/dicom/pkg/frame"
 	"github.com/suyashkumar/dicom/pkg/tag"
 	"github.com/suyashkumar/dicom/pkg/uid"
 )
@@ -54,29 +53,32 @@ var (
 
 // Parse parses the entire DICOM at the input io.Reader into a Dataset of DICOM Elements. Use this if you are
 // looking to parse the DICOM all at once, instead of element-by-element.
-func Parse(in io.Reader, bytesToRead int64, frameChan chan *frame.Frame) (Dataset, error) {
-	p, err := NewParser(in, bytesToRead, frameChan)
+func Parse(in io.Reader, opts ...Option) (Dataset, error) {
+	p, err := NewParser(in, opts...)
 	if err != nil {
 		return Dataset{}, err
 	}
 
-	for !p.reader.IsLimitExhausted() {
-		_, err := p.Next()
-		if err != nil {
-			return p.dataset, err
+	if p.options.ParseDataset {
+		for !p.reader.IsLimitExhausted() {
+			_, err := p.Next()
+			if err != nil {
+				return p.dataset, err
+			}
 		}
 	}
 
 	// Close the frameChannel if needed
-	if p.frameChannel != nil {
-		close(p.frameChannel)
+	if p.options.FrameChannel != nil {
+		close(p.options.FrameChannel)
 	}
+
 	return p.dataset, nil
 }
 
 // ParseFile parses the entire DICOM at the given filepath. See dicom.Parse as
 // well for a more generic io.Reader based API.
-func ParseFile(filepath string, frameChan chan *frame.Frame) (Dataset, error) {
+func ParseFile(filepath string, opts ...Option) (Dataset, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
 		return Dataset{}, err
@@ -88,7 +90,11 @@ func ParseFile(filepath string, frameChan chan *frame.Frame) (Dataset, error) {
 		return Dataset{}, err
 	}
 
-	return Parse(f, info.Size(), frameChan)
+	// default to file size as limit but retain the ability for the
+	// caller to override
+	opts = append([]Option{Limit(info.Size())}, opts...)
+
+	return Parse(f, opts...)
 }
 
 // Parser is a struct that allows a user to parse Elements from a DICOM element-by-element using Next(), which may be
@@ -98,9 +104,7 @@ type Parser struct {
 	reader   dicomio.Reader
 	dataset  Dataset
 	metadata Dataset
-	// file is optional, might be populated if reading from an underlying file
-	file         *os.File
-	frameChannel chan *frame.Frame
+	options  *Options
 }
 
 // NewParser returns a new Parser that points to the provided io.Reader, with bytesToRead bytes left to read. NewParser
@@ -108,15 +112,17 @@ type Parser struct {
 //
 // frameChannel is an optional channel (can be nil) upon which DICOM image frames will be sent as they are parsed (if
 // provided).
-func NewParser(in io.Reader, bytesToRead int64, frameChannel chan *frame.Frame) (*Parser, error) {
-	reader, err := dicomio.NewReader(bufio.NewReader(in), binary.LittleEndian, bytesToRead)
+func NewParser(in io.Reader, opts ...Option) (*Parser, error) {
+	options := NewOptions(opts...)
+
+	reader, err := dicomio.NewReader(bufio.NewReader(in), binary.LittleEndian, options.Limit)
 	if err != nil {
 		return nil, err
 	}
 
 	p := Parser{
-		reader:       reader,
-		frameChannel: frameChannel,
+		reader:  reader,
+		options: options,
 	}
 
 	elems, err := p.readHeader()
@@ -153,18 +159,21 @@ func NewParser(in io.Reader, bytesToRead int64, frameChannel chan *frame.Frame) 
 func (p *Parser) Next() (*Element, error) {
 	if p.reader.IsLimitExhausted() {
 		// Close the frameChannel if needed
-		if p.frameChannel != nil {
-			close(p.frameChannel)
+		if p.options.FrameChannel != nil {
+			close(p.options.FrameChannel)
 		}
 		return nil, ErrorEndOfDICOM
 	}
-	elem, err := readElement(p.reader, &p.dataset, p.frameChannel)
+
+	elem, err := readElement(p.reader, &p.dataset, p.options)
 	if err != nil {
 		// TODO: tolerate some kinds of errors and continue parsing
 		return nil, err
 	}
 
-	// TODO: add dicom options to only keep track of certain tags
+	if elem == nil {
+		return nil, nil
+	}
 
 	if elem.Tag == tag.SpecificCharacterSet {
 		encodingNames := MustGetStrings(elem.Value)
@@ -209,7 +218,7 @@ func (p *Parser) readHeader() ([]*Element, error) {
 
 	// Must read metadata as LittleEndian explicit VR
 	// Read the length of the metadata elements: (0002,0000) MetaElementGroupLength
-	maybeMetaLen, err := readElement(p.reader, nil, nil)
+	maybeMetaLen, err := readElement(p.reader, nil, p.options, true)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +238,7 @@ func (p *Parser) readHeader() ([]*Element, error) {
 	}
 	defer p.reader.PopLimit()
 	for !p.reader.IsLimitExhausted() {
-		elem, err := readElement(p.reader, nil, nil)
+		elem, err := readElement(p.reader, nil, p.options, true)
 		if err != nil {
 			// TODO: see if we can skip over malformed elements somehow
 			return nil, err
