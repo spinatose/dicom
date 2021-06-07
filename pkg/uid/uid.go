@@ -62,7 +62,7 @@ func ParseTransferSyntaxUID(uid string) (bo binary.ByteOrder, implicit bool, err
 	case ExplicitVRBigEndian:
 		return binary.BigEndian, false, nil
 	default:
-		return binary.BigEndian, false, fmt.Errorf("invalid or unknown transfer syntax: %v,  %v",
+		return binary.LittleEndian, false, fmt.Errorf("invalid or unknown transfer syntax: %v,  %v",
 			canonical, uid)
 	}
 }

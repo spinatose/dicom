@@ -368,7 +368,7 @@ func readBytes(r dicomio.Reader, t tag.Tag, vr string, vl uint32) (Value, error)
 		if vl%2 != 0 {
 			return nil, ErrorOWRequiresEvenVL
 		}
-		
+
 		buf := bytes.NewBuffer(make([]byte, 0, vl))
 		numWords := int(vl / 2)
 		for i := 0; i < numWords; i++ {
@@ -470,28 +470,24 @@ func readInt(r dicomio.Reader, t tag.Tag, vr string, vl uint32) (Value, error) {
 				return nil, err
 			}
 			retVal.value = append(retVal.value, int(val))
-			break
 		case vrraw.UnsignedLong:
 			val, err := r.ReadUInt32()
 			if err != nil {
 				return nil, err
 			}
 			retVal.value = append(retVal.value, int(val))
-			break
 		case vrraw.SignedLong:
 			val, err := r.ReadInt32()
 			if err != nil {
 				return nil, err
 			}
 			retVal.value = append(retVal.value, int(val))
-			break
 		case vrraw.SignedShort:
 			val, err := r.ReadInt16()
 			if err != nil {
 				return nil, err
 			}
 			retVal.value = append(retVal.value, int(val))
-			break
 		default:
 			return nil, errors.New("unable to parse integer type")
 		}
