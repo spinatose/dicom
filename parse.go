@@ -155,6 +155,30 @@ func NewParser(in io.Reader, opts ...Option) (*Parser, error) {
 	return &p, nil
 }
 
+// NewMessageParser with a given reader is a minimal dicom parser used for reading single elements
+// in a given message.
+func NewMessageParser(in io.Reader, opts ...Option) (*Parser, error) {
+	options := NewOptions(opts...)
+
+	reader, err := dicomio.NewReader(bufio.NewReader(in), binary.LittleEndian, options.Limit)
+	if err != nil {
+		return nil, err
+	}
+	p := Parser{
+		reader:  reader,
+		options: options,
+	}
+	p.dataset = Dataset{Elements: nil}
+	p.metadata = Dataset{Elements: nil}
+
+	// default will be LittleEndian Implicit for message parsing.
+	var bo binary.ByteOrder = binary.LittleEndian
+	implicit := true
+	p.reader.SetTransferSyntax(bo, implicit)
+
+	return &p, nil
+}
+
 // Next parses and returns the next top-level element from the DICOM this Parser points to.
 func (p *Parser) Next() (*Element, error) {
 	if p.reader.IsLimitExhausted() {

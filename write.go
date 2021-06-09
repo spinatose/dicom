@@ -42,9 +42,11 @@ func Write(out io.Writer, ds Dataset, opts ...WriteOption) error {
 		}
 	}
 
-	err := writeFileHeader(w, &ds, metaElems, *optSet)
-	if err != nil {
-		return err
+	if !optSet.skipHeaders {
+		err := writeFileHeader(w, &ds, metaElems, *optSet)
+		if err != nil {
+			return err
+		}
 	}
 
 	endian, implicit, err := ds.transferSyntax()
@@ -89,6 +91,14 @@ func SkipValueTypeVerification() WriteOption {
 	}
 }
 
+// SkipHeaders sets the writer to skip default writing headers. Useful for writing individual
+// elements.
+func SkipHeaders() WriteOption {
+	return func(set *writeOptSet) {
+		set.skipHeaders = true
+	}
+}
+
 // DefaultMissingTransferSyntax returns a WriteOption indicating that a missing
 // transferSyntax should not raise an error, and instead the default
 // LittleEndian Implicit transfer syntax should be used and written out as a
@@ -104,6 +114,7 @@ type writeOptSet struct {
 	skipVRVerification           bool
 	skipValueTypeVerification    bool
 	defaultMissingTransferSyntax bool
+	skipHeaders                  bool
 }
 
 func toOptSet(opts ...WriteOption) *writeOptSet {
