@@ -1,4 +1,4 @@
-module github.com/radpartners/dicom
+module github.com/suyashkumar/dicom
 
 go 1.13
 
